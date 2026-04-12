@@ -12,7 +12,7 @@ class Obserwowane(Enum):
     CYFRA_7 = 7
     CYFRA_8 = 8
     NIC = 0
-    ZAKRYTE = -1
+    ZAKRYTE = 9
     FLAGA = -2
 
 class Wewnetrzna(Enum):
@@ -30,6 +30,7 @@ class SaperEnv:
         self.plansza_obserwowana = []
         self.plansza_ukryta = []
         self.czyKoniecGry = False
+        self.czyWygranaGra = False
 
     def getCzyKoniecGry(self):
         return self.czyKoniecGry
@@ -93,6 +94,7 @@ class SaperEnv:
         self.WygenerujPlansze(move)
         self.step(move,Akcja.STRZAL)
         self.czyKoniecGry = False
+        self.czyWygranaGra = False
 
     def step(self,move,akcja):
         if(akcja == Akcja.FLAGA):
@@ -106,6 +108,7 @@ class SaperEnv:
 
             tab = [move]
             self.OdkrywanieKaskadowe(tab)
+            self.SprawdzCzyWygrana()
             return self.plansza_obserwowana,self.czyKoniecGry #+NAGRODA
 
     def OdkrywanieKaskadowe(self,tab):
@@ -149,10 +152,24 @@ class SaperEnv:
             else:
                 self.plansza_obserwowana[i[1]][i[0]] = Obserwowane(iloscMinWSasiedztwie)
 
+    def SprawdzCzyWygrana(self):
+        licznik = 0
+        for y in range(self.wielkosc_planszy):
+            for x in range(self.wielkosc_planszy):
+                if(self.plansza_obserwowana[y][x] == Obserwowane.ZAKRYTE):
+                    licznik += 1
+        if(licznik == self.liczba_min):
+            self.czyWygranaGra = True
+            return True
+        return False
 
 miny = SaperEnv(10,10)
+miny.reset(time.time())
 while(True):
-    input()
-    miny.reset(time.time())
     miny.printObserwowana()
+    x=int(input())
+    y=int(input())
+    newMove = (x,y)
+    miny.step(newMove,Akcja.STRZAL)
+
 
