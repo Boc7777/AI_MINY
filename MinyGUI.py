@@ -27,7 +27,8 @@ class MinyGUI:
         # historia
         self.opcje = tk.Frame(self.okno)
         self.opcje.pack(pady=10)
-
+        self.historia_ruchow = []
+        self.index_historii = 0
 
         self.rysujOpcje()
         self.stworzPlansze()
