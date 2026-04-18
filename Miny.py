@@ -273,13 +273,6 @@ class SaperEnv:
 
         return stan_dla_ai, nagroda, koniec_gry
 
-miny = SaperEnv(10,10)
-miny.reset(time.time(),True)
-while(True):
-    miny.printObserwowana()
-    x=int(input())
-    y=int(input())
-    newMove = (x,y)
-    miny.step(newMove,Akcja.STRZAL)
+
 
 
