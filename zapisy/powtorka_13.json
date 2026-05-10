@@ -1,0 +1,11 @@
+{
+    "seed": 13,
+    "wymiar": 10,
+    "liczba_min": 10,
+    "wygrana": false,
+    "ruchy": [
+        [4, 4, 1],
+        [6, 2, 0],
+        [6, 2, 1]
+    ]
+}

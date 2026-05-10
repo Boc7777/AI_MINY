@@ -1,0 +1,9 @@
+{
+    "seed": 123123,
+    "wymiar": 10,
+    "liczba_min": 10,
+    "wygrana": false,
+    "ruchy": [
+        [0, 7, 1]
+    ]
+}

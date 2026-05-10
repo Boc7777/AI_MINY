@@ -124,13 +124,13 @@ class SaperEnv:
 
         return self.get_state()
 
-    def zapis_ruchow(self,move):
+    def zapis_ruchow(self,move,akcja):
         if(self.czy_zapisywać):
-            self.historia_ruchow.append(move)
+            self.historia_ruchow.append([move[0],move[1],akcja.value])
 
     def step(self,move,akcja):
 
-        self.zapis_ruchow(move)
+        self.zapis_ruchow(move,akcja)
 
         if(akcja == Akcja.FLAGA):
             aktualne_pole = self.plansza_obserwowana[move[1]][move[0]]
@@ -147,15 +147,16 @@ class SaperEnv:
                 return self.plansza_obserwowana, self.czyKoniecGry, -0.1
 
         elif(akcja == Akcja.STRZAL):
+
+            # -------------------------------------------------------------------STRZELANIE W FALGE (NIE LEGALNE)
+            if (self.plansza_obserwowana[move[1]][move[0]] == Obserwowane.FLAGA):
+                return self.plansza_obserwowana, self.czyKoniecGry, -0.1
+
             # -------------------------------------------------------------------PRZEGRANA
             if(self.plansza_ukryta[move[1]][move[0]] == Wewnetrzna.MINA):
                 self.czyKoniecGry = True
                 self.zapisDoJsona()
                 return self.plansza_obserwowana,self.czyKoniecGry,0
-
-            # -------------------------------------------------------------------STRZELANIE W FALGE (NIE LEGALNE)
-            if (self.plansza_obserwowana[move[1]][move[0]] == Obserwowane.FLAGA):
-                return self.plansza_obserwowana,self.czyKoniecGry,-0.1
 
             # -------------------------------------------------------------------ZWYKLY RUCH
             tab = [move]
@@ -239,7 +240,11 @@ class SaperEnv:
 
         print(f"-------ZAPIS DO PLIKU: {sciezka_do_pliku}-------")
         json_string = json.dumps(dane_do_zapisu, indent=4)
-        json_string = re.sub(r'\[\s+([-\d]+),\s+([-\d]+)\s+\]', r'[\1, \2]', json_string)
+        json_string = re.sub(
+            r'\[\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)\s*\]',
+            r'[\1, \2, \3]',
+            json_string
+        )
 
         # 4. Zapisujemy pod nową ścieżką
         with open(sciezka_do_pliku, "w") as plik:
@@ -272,6 +277,27 @@ class SaperEnv:
                 nagroda = -1.0
 
         return stan_dla_ai, nagroda, koniec_gry
+
+
+# miny = SaperEnv(10,10)
+# miny.reset(13,True)
+# while(True):
+#     miny.printObserwowana()
+#     czyZapis = input("czy zapisać? ")
+#
+#     if(czyZapis == "1"):
+#         miny.zapisDoJsona()
+#
+#     x = input("Podaj x")
+#     y = input("Podaj y")
+#     akcja = input("Podaj akcja")
+#     if(akcja == "1"):
+#         akcja = Akcja.STRZAL
+#     else:
+#         akcja = Akcja.FLAGA
+#     miny.step((int(x),int(y)),akcja)
+
+
 
 
 
