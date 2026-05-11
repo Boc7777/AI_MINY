@@ -126,7 +126,7 @@ class SaperEnv:
 
     def zapis_ruchow(self,move,akcja):
         if(self.czy_zapisywać):
-            self.historia_ruchow.append([move[0],move[1],akcja.value])
+            self.historia_ruchow.append([int(move[0]),int(move[1]),akcja.value])
 
     def step(self,move,akcja):
 
@@ -162,7 +162,7 @@ class SaperEnv:
             tab = [move]
             self.OdkrywanieKaskadowe(tab)
             self.SprawdzCzyWygrana()
-            return self.plansza_obserwowana,self.czyKoniecGry,0
+            return self.plansza_obserwowana,self.czyKoniecGry,0.2
 
     def OdkrywanieKaskadowe(self,tab):
         for i in tab:
@@ -233,7 +233,7 @@ class SaperEnv:
         }
 
         folder = "zapisy"
-        nazwa_pliku = f"powtorka_{int(self.aktualny_seed)}.json"
+        nazwa_pliku = f"powtorka_{int(self.aktualny_seed)}_{len(self.historia_ruchow)}.json"
 
         sciezka_do_pliku = os.path.join(folder, nazwa_pliku)
         os.makedirs(folder, exist_ok=True)
@@ -255,7 +255,13 @@ class SaperEnv:
         stan_surowy =[]
         for wierszy in self.plansza_obserwowana:
             for pole in wierszy:
-                stan_surowy.append(pole.value)
+                val = pole.value
+                if val == -1:
+                    stan_surowy.append(-0.1)
+                elif val == -2:
+                    stan_surowy.append(-0.2)
+                else:
+                    stan_surowy.append(val / 8.0)
 
         return np.array(stan_surowy, dtype=np.float32)
 
@@ -266,15 +272,15 @@ class SaperEnv:
         x = akcja_id % self.wielkosc_planszy
         move = (x, y)
 
-        _, koniec_gry, _ = self.step(move, rodzaj_akcji)
+        _, koniec_gry, nagr = self.step(move, rodzaj_akcji)
         stan_dla_ai = self.get_state()
 
-        nagroda = 0.0
+        nagroda = nagr
         if koniec_gry:
             if self.czyWygranaGra:
-                nagroda = 1.0
+                nagroda = 20.0
             else:
-                nagroda = -1.0
+                nagroda = -5.0
 
         return stan_dla_ai, nagroda, koniec_gry
 
