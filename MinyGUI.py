@@ -78,7 +78,7 @@ class MinyGUI:
         for y in range(self.env.wielkosc_planszy):
             for x in range(self.env.wielkosc_planszy):
                 # guziki są domyślnie DISABLED - użytkownik nie może klikać
-                guzik = tk.Button(self.plansza_frame, width=10, height=5,
+                guzik = tk.Button(self.plansza_frame, width=7, height=3,
                                   font=('Arial', 8, 'bold'), state=tk.DISABLED, disabledforeground="black", padx=1, pady=1)
                 guzik.grid(row=y, column=x)
                 self.guziki[(x, y)] = guzik

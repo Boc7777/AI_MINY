@@ -173,7 +173,7 @@ class SaperEnv:
             tab = [move]
             self.OdkrywanieKaskadowe(tab)
             self.SprawdzCzyWygrana()
-            return self.plansza_obserwowana,self.czyKoniecGry,0.2
+            return self.plansza_obserwowana,self.czyKoniecGry,0.4
 
     def OdkrywanieKaskadowe(self,tab):
         for i in tab:

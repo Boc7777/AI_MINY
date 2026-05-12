@@ -3,6 +3,7 @@ import time
 
 import numpy as np
 import torch
+from torch.optim.lr_scheduler import StepLR
 
 import Miny
 from Agent import DQNAgent
@@ -10,9 +11,11 @@ import matplotlib.pyplot as plt
 
 
 def run_experiment(episodes=1000,wczytaj_model=False):
-    env = Miny.SaperEnv(wielkosc_planszy=6, liczba_min=3)
-    agent = DQNAgent(board_size=6)
-    batch_size = 32
+    env = Miny.SaperEnv(wielkosc_planszy=7, liczba_min=3)
+    agent = DQNAgent(board_size=7)
+
+    scheduler = StepLR(agent.optimizer, step_size=5000, gamma=0.5)
+    batch_size = 64
     history_wins = []
 
     if wczytaj_model:
@@ -48,8 +51,12 @@ def run_experiment(episodes=1000,wczytaj_model=False):
                         f"Epizod: {e}/{episodes}, Wynik: {'Wygrana' if env.czyWygranaGra else 'Bomba'}, Epsilon: {agent.epsilon:.2f}")
                 history_wins.append(1 if env.czyWygranaGra else 0)
 
-        if e % 10 == 0:
-            agent.update_target_model()
+            if len(agent.memory) > batch_size:
+                agent.train(batch_size)
+                agent.soft_update_target_model()
+
+        scheduler.step()
+
 
     agent.save_model("moj_saper_v1.pth")
     return history_wins
@@ -65,7 +72,7 @@ def moving_average(x, w):
     return np.convolve(x, np.ones(w), 'valid') / w
 
 
-plt.plot(moving_average(wins_normal, 500), label="Od zera")
+plt.plot(moving_average(wins_normal, 1000), label="Od zera")
 plt.legend()
 plt.title("Porównanie skuteczności agentów")
 plt.show()

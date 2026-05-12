@@ -18,8 +18,6 @@ class SaperNet(nn.Module):
             nn.ReLU(),
             nn.Linear(128, 128),  # Dodatkowa warstwa zwężająca
             nn.ReLU(),
-            nn.Linear(128, 128),  # Dodatkowa warstwa zwężająca
-            nn.ReLU(),
             nn.Linear(128, output_size)
         )
 
@@ -34,14 +32,15 @@ class DQNAgent:
         self.action_size = board_size * board_size
 
         # Pamięć doświadczeń (Replay Buffer)
-        self.memory = deque(maxlen=10000)
+        self.memory = deque(maxlen=100000)
 
         # Hiperparametry uczenia
-        self.gamma = 0.95  # Współczynnik dyskontowania
+        self.gamma = 0.99  # Współczynnik dyskontowania
         self.epsilon = 1.0  # Początkowa szansa na ruch losowy (100%)
         self.epsilon_min = 0.025
-        self.epsilon_decay = 0.9997
+        self.epsilon_decay = 0.9999
         self.learning_rate = 0.0001
+        self.tau = 0.005
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = SaperNet(self.state_size, self.action_size).to(self.device)
@@ -58,6 +57,11 @@ class DQNAgent:
         """Kopiuje wagi z modelu głównego do modelu Target."""
         self.target_model.load_state_dict(self.model.state_dict())
         self.target_model.eval()  # Sieć Target zawsze w trybie oceny
+
+    def soft_update_target_model(self):
+        """Powolne (płynne) aktualizowanie modelu Target."""
+        for target_param, local_param in zip(self.target_model.parameters(), self.model.parameters()):
+            target_param.data.copy_(self.tau * local_param.data + (1.0 - self.tau) * target_param.data)
 
     def get_action(self, state):
         valid_actions = [i for i, val in enumerate(state) if val < 0]
@@ -129,10 +133,10 @@ class DQNAgent:
         curr_q_values = self.model(states)
 
         with torch.no_grad():
-            next_q_values = self.target_model(next_states)
-            max_next_q = torch.max(next_q_values, dim=1)[0]
-            # Jeśli done=True, przyszła nagroda wynosi 0 (Bellman)
-            targets = rewards + (self.gamma * max_next_q * (~dones))
+
+            next_actions = self.model(next_states).argmax(1).unsqueeze(1)
+            next_q_values = self.target_model(next_states).gather(1, next_actions).squeeze(1)
+            targets = rewards + (self.gamma * next_q_values * (~dones))
 
         # Przygotowujemy wynik do porównania
         target_f = curr_q_values.clone()
