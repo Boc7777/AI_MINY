@@ -126,10 +126,8 @@ class SaperEnv:
 
     def zapis_ruchow(self, move, akcja, q_values=None, czy_losowy=False):
         if self.czy_zapisywać:
-            # Jeśli q_values to lista/krotka dwóch tablic, zamień każdą na listę
             serialized_q = None
             if q_values is not None:
-                # Zapisujemy jako listę dwóch list: [lista_main, lista_target]
                 serialized_q = [q.tolist() for q in q_values]
 
             self.historia_ruchow.append({
@@ -257,7 +255,6 @@ class SaperEnv:
             json_string
         )
 
-        # 4. Zapisujemy pod nową ścieżką
         with open(sciezka_do_pliku, "w") as plik:
             plik.write(json_string)
 

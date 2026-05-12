@@ -1,13 +1,13 @@
 import json
 import tkinter as tk
 from tkinter import filedialog
-import Miny  # Import Twojego silnika
+import Miny
 import os
 
 class MinyGUI:
     def __init__(self, okno):
         self.okno = okno
-        self.env = None  # Środowisko stworzymy po wczytaniu pliku
+        self.env = None
         self.guziki = {}
         self.kolory = {
             1: 'blue', 2: 'green', 3: 'red', 4: 'purple',
@@ -17,7 +17,7 @@ class MinyGUI:
         self.aktualna_akcja = "STRZAŁ"
         self.q_values = None
 
-        # --- GÓRNY PANEL (Przyciski sterowania) ---
+        # --- GÓRNY PANEL ---
         self.opcje = tk.Frame(self.okno)
         self.opcje.pack(pady=10)
 
@@ -35,7 +35,7 @@ class MinyGUI:
         self.label_info = tk.Label(self.okno, text="Oczekiwanie na plik...", font=('Arial', 10, 'italic'))
         self.label_info.pack(pady=5)
 
-        # --- RAMKA NA PLANSZĘ (Na początku pusta) ---
+        # --- RAMKA NA PLANSZĘ ---
         self.plansza_frame = tk.Frame(self.okno)
         self.plansza_frame.pack(padx=20, pady=20)
 
@@ -52,7 +52,6 @@ class MinyGUI:
             with open(sciezka, 'r') as f:
                 self.dane_powtorki = json.load(f)
 
-            # Inicjalizujemy środowisko na podstawie danych z pliku
             self.env = Miny.SaperEnv(self.dane_powtorki["wymiar"], self.dane_powtorki["liczba_min"])
             self.historia_ruchow = self.dane_powtorki["ruchy"]
             self.index_historii = 0
@@ -77,7 +76,6 @@ class MinyGUI:
         # Tworzymy siatkę guzików
         for y in range(self.env.wielkosc_planszy):
             for x in range(self.env.wielkosc_planszy):
-                # guziki są domyślnie DISABLED - użytkownik nie może klikać
                 guzik = tk.Button(self.plansza_frame, width=7, height=3,
                                   font=('Arial', 8, 'bold'), state=tk.DISABLED, disabledforeground="black", padx=1, pady=1)
                 guzik.grid(row=y, column=x)
@@ -87,7 +85,6 @@ class MinyGUI:
         if self.index_historii < len(self.historia_ruchow):
             ruch = self.historia_ruchow[self.index_historii]
 
-            # Obsługa nowego formatu słownikowego z JSON
             self.q_values = ruch.get("q_values")
             coords = ruch.get("coords", [0, 0])
             x, y = coords[0], coords[1]
@@ -106,7 +103,6 @@ class MinyGUI:
     def poprzedni_krok(self):
         if self.index_historii > 0:
             docelowy_index = self.index_historii - 1
-            # Saper nie ma łatwego "undo", więc resetujemy i odtwarzamy do N-1
             self.env.reset(seed=self.dane_powtorki["seed"])
             self.index_historii = 0
             self.ostatni_ruch = None
@@ -120,7 +116,6 @@ class MinyGUI:
             self.rysujPlansze()
 
     def aktualizujStatus(self):
-        # Pobieramy info o ostatnim ruchu z historii
         czy_losowy = False
         if self.index_historii > 0:
             ostatni = self.historia_ruchow[self.index_historii - 1]
@@ -131,28 +126,25 @@ class MinyGUI:
         elif self.env.czyKoniecGry:
             wynik, kolor = "BOMBA!", "red"
         else:
-            # TUTAJ ZMIANA: Status zmienia się tylko gdy ruch był losowy
             if czy_losowy:
-                wynik, kolor = "EKSPLORACJA (LOSOWO)", "orange"  # Wyróżniający kolor
+                wynik, kolor = "EKSPLORACJA (LOSOWO)", "orange"
             else:
                 wynik, kolor = "W TRAKCIE (AI)", "black"
 
         tekst = (
             f"Plik: {self.nazwa_pliku}\n"
             f"Krok: {self.index_historii}/{len(self.historia_ruchow)} | "
-            f"Typ: {'🎲 LOS' if czy_losowy else '🧠 AI'} | "  # Dodatkowy wskaźnik
+            f"Typ: {'🎲 LOS' if czy_losowy else '🧠 AI'} | "
             f"Status: {wynik}"
         )
         self.label_info.config(text=tekst, fg=kolor)
 
     def rysujPlansze(self):
-        # 1. POBIERANIE Q Z PRZYSZŁOŚCI (Peek ahead)
         q_przyszle = None
         if self.index_historii < len(self.historia_ruchow):
             ruch_przyszly = self.historia_ruchow[self.index_historii]
-            q_przyszle = ruch_przyszly.get("q_values")  #
+            q_przyszle = ruch_przyszly.get("q_values")
 
-        # 2. SPRAWDZANIE CZY OSTATNI RUCH BYŁ LOSOWY (dla robota)
         czy_losowy = False
         if self.index_historii > 0:
             ostatni = self.historia_ruchow[self.index_historii - 1]
@@ -164,18 +156,15 @@ class MinyGUI:
                 guzik = self.guziki[(x, y)]
                 stan = self.env.plansza_obserwowana[y][x]
 
-                # --- USTALANIE KOLORÓW I ELEMENTÓW TEKSTU ---
-                bg_color = "#999"  # Zakryte
+                bg_color = "#999"
                 fg_color = "black"
 
-                # Wybieramy ikonę robota zależnie od tego, czy ostatni ruch był AI czy LOS
                 ikona_robota = "🎲" if czy_losowy else "🤖"
                 linia_robot = ikona_robota if (x, y) == self.ostatni_ruch else ""
 
                 linia_q = ""
                 linia_stan = ""
 
-                # --- LOGIKA STANU POLA ---
                 if stan == Miny.Obserwowane.FLAGA:
                     linia_stan = "🚩"
                     bg_color = "#ffcccc"
@@ -184,7 +173,6 @@ class MinyGUI:
                         linia_stan = "💣"
                         bg_color = "red"
                     elif q_przyszle:
-                        # Wyświetlamy M i T z następnego kroku
                         if isinstance(q_przyszle[0], list):
                             m_val = q_przyszle[0][idx]
                             t_val = q_przyszle[1][idx]
@@ -199,7 +187,6 @@ class MinyGUI:
                     fg_color = self.kolory.get(stan.value, 'black')
                     bg_color = "white"
 
-                # --- SKŁADANIE FINALNEGO TEKSTU ---
                 elementy = []
                 if linia_robot: elementy.append(linia_robot)
                 if linia_q:     elementy.append(linia_q)
@@ -214,7 +201,7 @@ class MinyGUI:
                     text=pelny_tekst,
                     bg=bg_color,
                     fg=fg_color,
-                    font=('Arial', 15)  # Zmniejszyłem font, bo przy 15 nic się nie zmieści
+                    font=('Arial', 15)
                 )
 
 

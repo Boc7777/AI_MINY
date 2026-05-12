@@ -8,45 +8,52 @@ import random
 from collections import deque
 
 
-
-# 1. Architektura sieci neuronowej (Mózg Agenta)
 class SaperNet(nn.Module):
-    def __init__(self, input_size, output_size):
+    def __init__(self, board_size, output_size):
         super(SaperNet, self).__init__()
-        self.net = nn.Sequential(
-            nn.Linear(input_size, 128),  # Z 128 na 256
+        self.board_size = board_size
+
+        self.conv = nn.Sequential(
+            nn.Conv2d(1, 32, kernel_size=3, padding=1),
             nn.ReLU(),
-            nn.Linear(128, 128),  # Dodatkowa warstwa zwężająca
+            nn.Conv2d(32, 64, kernel_size=3, padding=1),
+            nn.ReLU()
+        )
+
+        self.fc = nn.Sequential(
+            nn.Linear(64 * board_size * board_size, 128),
             nn.ReLU(),
             nn.Linear(128, output_size)
         )
 
     def forward(self, x):
-        return self.net(x)
+        x = x.view(-1, 1, self.board_size, self.board_size)
+        x = self.conv(x)
+        x = x.view(x.size(0), -1)
+        return self.fc(x)
 
 
-# 2. Klasa Agenta DQN (Tabula Rasa)
-class DQNAgent:
+class DDQNAgent:
     def __init__(self, board_size):
         self.state_size = board_size * board_size
         self.action_size = board_size * board_size
 
-        # Pamięć doświadczeń (Replay Buffer)
+        #Replay Buffer
         self.memory = deque(maxlen=100000)
 
-        # Hiperparametry uczenia
-        self.gamma = 0.99  # Współczynnik dyskontowania
-        self.epsilon = 1.0  # Początkowa szansa na ruch losowy (100%)
+
+        self.gamma = 0.99
+        self.epsilon = 1.0
         self.epsilon_min = 0.025
-        self.epsilon_decay = 0.9999
+        self.epsilon_decay = 0.9995
         self.learning_rate = 0.0001
         self.tau = 0.005
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model = SaperNet(self.state_size, self.action_size).to(self.device)
 
+        self.model = SaperNet(board_size, self.action_size).to(self.device)
+        self.target_model = SaperNet(board_size, self.action_size).to(self.device)
 
-        self.target_model = SaperNet(self.state_size, self.action_size).to(self.device)
         self.update_target_model()
 
 
@@ -54,12 +61,10 @@ class DQNAgent:
         self.criterion = nn.MSELoss()
 
     def update_target_model(self):
-        """Kopiuje wagi z modelu głównego do modelu Target."""
         self.target_model.load_state_dict(self.model.state_dict())
-        self.target_model.eval()  # Sieć Target zawsze w trybie oceny
+        self.target_model.eval()
 
     def soft_update_target_model(self):
-        """Powolne (płynne) aktualizowanie modelu Target."""
         for target_param, local_param in zip(self.target_model.parameters(), self.model.parameters()):
             target_param.data.copy_(self.tau * local_param.data + (1.0 - self.tau) * target_param.data)
 

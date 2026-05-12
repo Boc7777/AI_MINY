@@ -6,13 +6,13 @@ import torch
 from torch.optim.lr_scheduler import StepLR
 
 import Miny
-from Agent import DQNAgent
+from Agent import DDQNAgent
 import matplotlib.pyplot as plt
 
 
 def run_experiment(episodes=1000,wczytaj_model=False):
-    env = Miny.SaperEnv(wielkosc_planszy=7, liczba_min=3)
-    agent = DQNAgent(board_size=7)
+    env = Miny.SaperEnv(wielkosc_planszy=7, liczba_min=4)
+    agent = DDQNAgent(board_size=7)
 
     scheduler = StepLR(agent.optimizer, step_size=5000, gamma=0.5)
     batch_size = 64
@@ -27,9 +27,9 @@ def run_experiment(episodes=1000,wczytaj_model=False):
         los = e*random.randint(0,999999999999)
         state = env.reset(seed= (los - (los%100000))+e, zapis=(e % 250 == 0))
         done = False
-
+        kroki = 0
         while not done:
-
+            kroki += 1
             q_main, q_target = agent.get_q_values(state)
 
             action, is_random = agent.get_action(state)
@@ -42,16 +42,13 @@ def run_experiment(episodes=1000,wczytaj_model=False):
             agent.remember(state, action, reward, next_state, done)
             state = next_state
 
-            if len(agent.memory) > batch_size:
-                agent.train(batch_size)
-
             if done:
                 if(e % 100 == 0):
                     print(
                         f"Epizod: {e}/{episodes}, Wynik: {'Wygrana' if env.czyWygranaGra else 'Bomba'}, Epsilon: {agent.epsilon:.2f}")
                 history_wins.append(1 if env.czyWygranaGra else 0)
 
-            if len(agent.memory) > batch_size:
+            if len(agent.memory) > batch_size and kroki % 2 == 0:
                 agent.train(batch_size)
                 agent.soft_update_target_model()
 
@@ -64,7 +61,7 @@ def run_experiment(episodes=1000,wczytaj_model=False):
 
 # --- URUCHOMIENIE BADANIA ---
 print("Trenowanie Agenta 'Od zera'...")
-wins_normal = run_experiment(episodes=20000, wczytaj_model=False)
+wins_normal = run_experiment(episodes=5000, wczytaj_model=False)
 
 
 # Wykres wygranych (średnia krocząca)
