@@ -11,11 +11,11 @@ import matplotlib.pyplot as plt
 
 
 def run_experiment(episodes=1000,wczytaj_model=False):
-    env = Miny.SaperEnv(wielkosc_planszy=7, liczba_min=4)
-    agent = DDQNAgent(board_size=7)
+    env = Miny.SaperEnv(wielkosc_planszy=6, liczba_min=3)
+    agent = DDQNAgent(board_size=6)
 
     scheduler = StepLR(agent.optimizer, step_size=5000, gamma=0.5)
-    batch_size = 64
+    batch_size = 128
     history_wins = []
 
     if wczytaj_model:
@@ -23,7 +23,6 @@ def run_experiment(episodes=1000,wczytaj_model=False):
         agent.epsilon = 0.3
 
     for e in range(episodes):
-        # Używamy numeru epizodu jako seeda dla powtarzalności
         los = e*random.randint(0,999999999999)
         state = env.reset(seed= (los - (los%100000))+e, zapis=(e % 250 == 0))
         done = False
@@ -48,7 +47,7 @@ def run_experiment(episodes=1000,wczytaj_model=False):
                         f"Epizod: {e}/{episodes}, Wynik: {'Wygrana' if env.czyWygranaGra else 'Bomba'}, Epsilon: {agent.epsilon:.2f}")
                 history_wins.append(1 if env.czyWygranaGra else 0)
 
-            if len(agent.memory) > batch_size and kroki % 2 == 0:
+            if len(agent.memory) > batch_size and kroki % 1 == 0:
                 agent.train(batch_size)
                 agent.soft_update_target_model()
 
@@ -59,12 +58,10 @@ def run_experiment(episodes=1000,wczytaj_model=False):
     return history_wins
 
 
-# --- URUCHOMIENIE BADANIA ---
+
 print("Trenowanie Agenta 'Od zera'...")
-wins_normal = run_experiment(episodes=5000, wczytaj_model=False)
+wins_normal = run_experiment(episodes=10000, wczytaj_model=False)
 
-
-# Wykres wygranych (średnia krocząca)
 def moving_average(x, w):
     return np.convolve(x, np.ones(w), 'valid') / w
 
