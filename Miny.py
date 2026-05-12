@@ -124,13 +124,24 @@ class SaperEnv:
 
         return self.get_state()
 
-    def zapis_ruchow(self,move,akcja):
-        if(self.czy_zapisywać):
-            self.historia_ruchow.append([int(move[0]),int(move[1]),akcja.value])
+    def zapis_ruchow(self, move, akcja, q_values=None, czy_losowy=False):
+        if self.czy_zapisywać:
+            # Jeśli q_values to lista/krotka dwóch tablic, zamień każdą na listę
+            serialized_q = None
+            if q_values is not None:
+                # Zapisujemy jako listę dwóch list: [lista_main, lista_target]
+                serialized_q = [q.tolist() for q in q_values]
 
-    def step(self,move,akcja):
+            self.historia_ruchow.append({
+                "coords": [int(move[0]), int(move[1])],
+                "akcja": akcja.value,
+                "q_values": serialized_q,
+                "losowy": czy_losowy
+            })
 
-        self.zapis_ruchow(move,akcja)
+    def step(self,move,akcja, q_values=None, czy_losowy=False):
+
+        self.zapis_ruchow(move, akcja, q_values=q_values, czy_losowy=czy_losowy)
 
         if(akcja == Akcja.FLAGA):
             aktualne_pole = self.plansza_obserwowana[move[1]][move[0]]
@@ -233,7 +244,7 @@ class SaperEnv:
         }
 
         folder = "zapisy"
-        nazwa_pliku = f"powtorka_{int(self.aktualny_seed)}_{len(self.historia_ruchow)}.json"
+        nazwa_pliku = f"powtorka_{len(self.historia_ruchow)}_{int(self.aktualny_seed)}.json"
 
         sciezka_do_pliku = os.path.join(folder, nazwa_pliku)
         os.makedirs(folder, exist_ok=True)
@@ -265,14 +276,15 @@ class SaperEnv:
 
         return np.array(stan_surowy, dtype=np.float32)
 
-    def step_ai(self, akcja_id):
+    def step_ai(self, akcja_id, q_values=None, czy_losowy=False):
         rodzaj_akcji = Akcja.STRZAL
 
         y = akcja_id // self.wielkosc_planszy
         x = akcja_id % self.wielkosc_planszy
         move = (x, y)
 
-        _, koniec_gry, nagr = self.step(move, rodzaj_akcji)
+
+        _, koniec_gry, nagr = self.step(move, rodzaj_akcji, q_values=q_values, czy_losowy=czy_losowy)
         stan_dla_ai = self.get_state()
 
         nagroda = nagr
@@ -280,7 +292,7 @@ class SaperEnv:
             if self.czyWygranaGra:
                 nagroda = 20.0
             else:
-                nagroda = -5.0
+                nagroda = -15.0
 
         return stan_dla_ai, nagroda, koniec_gry
 

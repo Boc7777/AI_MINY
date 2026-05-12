@@ -15,6 +15,7 @@ class MinyGUI:
         }
         self.ostatni_ruch = None
         self.aktualna_akcja = "STRZAŁ"
+        self.q_values = None
 
         # --- GÓRNY PANEL (Przyciski sterowania) ---
         self.opcje = tk.Frame(self.okno)
@@ -77,8 +78,8 @@ class MinyGUI:
         for y in range(self.env.wielkosc_planszy):
             for x in range(self.env.wielkosc_planszy):
                 # guziki są domyślnie DISABLED - użytkownik nie może klikać
-                guzik = tk.Button(self.plansza_frame, width=3, height=1,
-                                  font=('Arial', 12, 'bold'), state=tk.DISABLED, disabledforeground="black")
+                guzik = tk.Button(self.plansza_frame, width=10, height=5,
+                                  font=('Arial', 8, 'bold'), state=tk.DISABLED, disabledforeground="black", padx=1, pady=1)
                 guzik.grid(row=y, column=x)
                 self.guziki[(x, y)] = guzik
 
@@ -86,27 +87,21 @@ class MinyGUI:
         if self.index_historii < len(self.historia_ruchow):
             ruch = self.historia_ruchow[self.index_historii]
 
-            x = ruch[0]
-            y = ruch[1]
-            typ_akcji_val = ruch[2] if len(ruch) > 2 else 1
+            # Obsługa nowego formatu słownikowego z JSON
+            self.q_values = ruch.get("q_values")
+            coords = ruch.get("coords", [0, 0])
+            x, y = coords[0], coords[1]
+            typ_akcji_val = ruch.get("akcja", 1)
+
             akcja = Miny.Akcja(typ_akcji_val)
-
             self.ostatni_ruch = (x, y)
-
-            if typ_akcji_val == 0:
-                self.aktualna_akcja = "FLAGA"
-            else:
-                self.aktualna_akcja = "STRZAŁ"
+            self.aktualna_akcja = "FLAGA" if typ_akcji_val == 0 else "STRZAŁ"
 
             self.env.step((x, y), akcja)
-
             self.index_historii += 1
             self.rysujPlansze()
             self.guzik_cofnij.config(state=tk.NORMAL)
             self.aktualizujStatus()
-
-            if self.index_historii == len(self.historia_ruchow) or self.env.czyKoniecGry:
-                self.guzik_dalej.config(state=tk.DISABLED)
 
     def poprzedni_krok(self):
         if self.index_historii > 0:
@@ -125,48 +120,102 @@ class MinyGUI:
             self.rysujPlansze()
 
     def aktualizujStatus(self):
+        # Pobieramy info o ostatnim ruchu z historii
+        czy_losowy = False
+        if self.index_historii > 0:
+            ostatni = self.historia_ruchow[self.index_historii - 1]
+            czy_losowy = ostatni.get("losowy", False)
+
         if self.env.czyWygranaGra:
-            wynik = "ZWYCIĘSTWO!"
-            kolor = "green"
+            wynik, kolor = "ZWYCIĘSTWO!", "green"
         elif self.env.czyKoniecGry:
-            wynik = "BOMBA!"
-            kolor = "red"
+            wynik, kolor = "BOMBA!", "red"
         else:
-            wynik = "W TRAKCIE"
-            kolor = "black"
+            # TUTAJ ZMIANA: Status zmienia się tylko gdy ruch był losowy
+            if czy_losowy:
+                wynik, kolor = "EKSPLORACJA (LOSOWO)", "orange"  # Wyróżniający kolor
+            else:
+                wynik, kolor = "W TRAKCIE (AI)", "black"
 
         tekst = (
             f"Plik: {self.nazwa_pliku}\n"
             f"Krok: {self.index_historii}/{len(self.historia_ruchow)} | "
-            f"Ostatnia akcja: {self.aktualna_akcja} | "
+            f"Typ: {'🎲 LOS' if czy_losowy else '🧠 AI'} | "  # Dodatkowy wskaźnik
             f"Status: {wynik}"
         )
-
         self.label_info.config(text=tekst, fg=kolor)
 
     def rysujPlansze(self):
+        # 1. POBIERANIE Q Z PRZYSZŁOŚCI (Peek ahead)
+        q_przyszle = None
+        if self.index_historii < len(self.historia_ruchow):
+            ruch_przyszly = self.historia_ruchow[self.index_historii]
+            q_przyszle = ruch_przyszly.get("q_values")  #
+
+        # 2. SPRAWDZANIE CZY OSTATNI RUCH BYŁ LOSOWY (dla robota)
+        czy_losowy = False
+        if self.index_historii > 0:
+            ostatni = self.historia_ruchow[self.index_historii - 1]
+            czy_losowy = ostatni.get("losowy", False)
+
         for y in range(self.env.wielkosc_planszy):
             for x in range(self.env.wielkosc_planszy):
+                idx = y * self.env.wielkosc_planszy + x
                 guzik = self.guziki[(x, y)]
                 stan = self.env.plansza_obserwowana[y][x]
+
+                # --- USTALANIE KOLORÓW I ELEMENTÓW TEKSTU ---
+                bg_color = "#999"  # Zakryte
+                fg_color = "black"
+
+                # Wybieramy ikonę robota zależnie od tego, czy ostatni ruch był AI czy LOS
+                ikona_robota = "🎲" if czy_losowy else "🤖"
+                linia_robot = ikona_robota if (x, y) == self.ostatni_ruch else ""
+
+                linia_q = ""
+                linia_stan = ""
+
+                # --- LOGIKA STANU POLA ---
                 if stan == Miny.Obserwowane.FLAGA:
-                    guzik.config(text="🚩", bg="#ffcccc")
+                    linia_stan = "🚩"
+                    bg_color = "#ffcccc"
                 elif stan == Miny.Obserwowane.ZAKRYTE:
-                    # Pokazujemy bomby tylko po przegranej
                     if self.env.czyKoniecGry and self.env.plansza_ukryta[y][x] == Miny.Wewnetrzna.MINA:
-                        guzik.config(text="💣", bg="red")
-                    else:
-                        guzik.config(text="", bg="#bbb")
+                        linia_stan = "💣"
+                        bg_color = "red"
+                    elif q_przyszle:
+                        # Wyświetlamy M i T z następnego kroku
+                        if isinstance(q_przyszle[0], list):
+                            m_val = q_przyszle[0][idx]
+                            t_val = q_przyszle[1][idx]
+                            linia_q = f"M:{m_val:.1f}\nT:{t_val:.1f}"
+                        else:
+                            linia_q = f"Q:{q_przyszle[idx]:.1f}"
                 elif stan == Miny.Obserwowane.NIC:
-                    guzik.config(text="", bg="#eeeeee")
+                    linia_stan = ""
+                    bg_color = "#eeeeee"
                 else:
-                    kolor = self.kolory.get(stan.value, 'black')
-                    guzik.config(text=str(stan.value), fg=kolor, bg="white")
+                    linia_stan = str(stan.value)
+                    fg_color = self.kolory.get(stan.value, 'black')
+                    bg_color = "white"
+
+                # --- SKŁADANIE FINALNEGO TEKSTU ---
+                elementy = []
+                if linia_robot: elementy.append(linia_robot)
+                if linia_q:     elementy.append(linia_q)
+                if linia_stan:  elementy.append(linia_stan)
+
+                pelny_tekst = "\n".join(elementy)
 
                 if (x, y) == self.ostatni_ruch:
-                    aktualny_tekst = guzik.cget("text")
-                    nowy_tekst = f"🤖{aktualny_tekst}" if aktualny_tekst else "🤖"
-                    guzik.config(text=nowy_tekst, bg="#FFFACD")
+                    bg_color = "#FFFACD"
+
+                guzik.config(
+                    text=pelny_tekst,
+                    bg=bg_color,
+                    fg=fg_color,
+                    font=('Arial', 15)  # Zmniejszyłem font, bo przy 15 nic się nie zmieści
+                )
 
 
 if __name__ == "__main__":

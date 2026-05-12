@@ -8,16 +8,17 @@ import random
 from collections import deque
 
 
+
 # 1. Architektura sieci neuronowej (Mózg Agenta)
 class SaperNet(nn.Module):
     def __init__(self, input_size, output_size):
         super(SaperNet, self).__init__()
         self.net = nn.Sequential(
-            nn.Linear(input_size, 256),  # Z 128 na 256
+            nn.Linear(input_size, 128),  # Z 128 na 256
             nn.ReLU(),
-            nn.Linear(256, 256),
+            nn.Linear(128, 128),  # Dodatkowa warstwa zwężająca
             nn.ReLU(),
-            nn.Linear(256, 128),  # Dodatkowa warstwa zwężająca
+            nn.Linear(128, 128),  # Dodatkowa warstwa zwężająca
             nn.ReLU(),
             nn.Linear(128, output_size)
         )
@@ -33,37 +34,58 @@ class DQNAgent:
         self.action_size = board_size * board_size
 
         # Pamięć doświadczeń (Replay Buffer)
-        self.memory = deque(maxlen=20000)
+        self.memory = deque(maxlen=10000)
 
         # Hiperparametry uczenia
         self.gamma = 0.95  # Współczynnik dyskontowania
         self.epsilon = 1.0  # Początkowa szansa na ruch losowy (100%)
-        self.epsilon_min = 0.05
-        self.epsilon_decay = 0.995
-        self.learning_rate = 0.00025
+        self.epsilon_min = 0.025
+        self.epsilon_decay = 0.9997
+        self.learning_rate = 0.0001
 
-        self.model = SaperNet(self.state_size, self.action_size)
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model = SaperNet(self.state_size, self.action_size).to(self.device)
+
+
+        self.target_model = SaperNet(self.state_size, self.action_size).to(self.device)
+        self.update_target_model()
+
+
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.learning_rate)
         self.criterion = nn.MSELoss()
 
+    def update_target_model(self):
+        """Kopiuje wagi z modelu głównego do modelu Target."""
+        self.target_model.load_state_dict(self.model.state_dict())
+        self.target_model.eval()  # Sieć Target zawsze w trybie oceny
+
     def get_action(self, state):
-        # 0. IDENTYFIKACJA DOZWOLONYCH RUCHÓW
-        # Szukamy indeksów pól, których wartość to -1 (czyli Obserwowane.ZAKRYTE)
         valid_actions = [i for i, val in enumerate(state) if val < 0]
-
-        # Zabezpieczenie: jeśli nie ma żadnych wolnych pól, wybierz cokolwiek (nie powinno się zdarzyć)
         if not valid_actions:
-            return random.randrange(self.action_size)
+            return random.randrange(self.action_size), True  #
 
-        # 1. RZUT MONETĄ (Eksploracja)
-        # Wybieramy losowo TYLKO z listy valid_actions
+        # RZUT MONETĄ (Eksploracja)
         if np.random.rand() <= self.epsilon:
-            return random.choice(valid_actions)
+            return random.choice(valid_actions), True  # Zwracamy True dla losowego
+
+        # PYTANIE DO SIECI (Eksploatacja)
+        state_t = torch.FloatTensor(state).unsqueeze(0).to(self.device)
+        with torch.no_grad():
+            act_values = self.model(state_t).cpu().numpy()[0]
+
+        masked_q_values = np.full(self.action_size, -np.inf)
+        for i in valid_actions:
+            masked_q_values[i] = act_values[i]
+
+        return int(np.argmax(masked_q_values)), False  # Zwracamy False dla AI
+
+
+
 
         # 2. PYTANIE DO SIECI (Eksploatacja)
-        state_t = torch.FloatTensor(state).unsqueeze(0)
+        state_t = torch.FloatTensor(state).unsqueeze(0).to(self.device)
         with torch.no_grad():
-            act_values = self.model(state_t).numpy()[0] # Pobieramy wyniki jako tablicę numpy
+            act_values = self.model(state_t).cpu().numpy()[0] # Pobieramy wyniki jako tablicę numpy
 
         # --- MASKOWANIE AKCJI ---
         # Tworzymy tablicę wypełnioną bardzo małą liczbą (minus nieskończoność)
@@ -75,6 +97,13 @@ class DQNAgent:
 
         # argmax wybierze teraz najlepsze pole spośród TYLKO tych zakrytych
         return int(np.argmax(masked_q_values))
+
+    def get_q_values(self, state):
+        state_t = torch.FloatTensor(state).unsqueeze(0).to(self.device)
+        with torch.no_grad():
+            q_main = self.model(state_t).cpu().numpy()[0]
+            q_target = self.target_model(state_t).cpu().numpy()[0]
+        return q_main, q_target
 
     def remember(self, state, action, reward, next_state, done):
         """Zapisanie przeżycia do pamięci."""
@@ -88,31 +117,34 @@ class DQNAgent:
         # Losujemy paczkę wspomnień
         minibatch = random.sample(self.memory, batch_size)
 
-        for state, action, reward, next_state, done in minibatch:
-            state_t = torch.FloatTensor(state)
-            next_state_t = torch.FloatTensor(next_state)
+        # 1. WEKTORYZACJA: Tworzymy duże macierze zamiast pętli FOR
+        states = torch.FloatTensor(np.array([m[0] for m in minibatch])).to(self.device)
+        actions = torch.LongTensor([m[1] for m in minibatch]).to(self.device)
+        rewards = torch.FloatTensor([m[2] for m in minibatch]).to(self.device)
+        next_states = torch.FloatTensor(np.array([m[3] for m in minibatch])).to(self.device)
+        dones = torch.BoolTensor([m[4] for m in minibatch]).to(self.device)
 
-            # Obliczanie docelowej wartości Q (Target)
-            target = reward
-            if not done:
-                # Używamy równania Bellmana: Q(s,a) = r + gamma * max(Q(s',a'))
-                target = reward + self.gamma * torch.max(self.model(next_state_t)).item()
+        # 2. OBLICZANIE TARGETÓW (Wszystkie 32 naraz!)
+        # Używamy modelu do przewidzenia Q dla obecnych i przyszłych stanów
+        curr_q_values = self.model(states)
 
-            # Pobieramy obecne przewidywania sieci
-            target_f = self.model(state_t)
+        with torch.no_grad():
+            next_q_values = self.target_model(next_states)
+            max_next_q = torch.max(next_q_values, dim=1)[0]
+            # Jeśli done=True, przyszła nagroda wynosi 0 (Bellman)
+            targets = rewards + (self.gamma * max_next_q * (~dones))
 
-            # Aktualizujemy wartość tylko dla akcji, którą faktycznie wykonaliśmy
-            with torch.no_grad():
-                target_new = target_f.clone()
-            target_new[action] = target
+        # Przygotowujemy wynik do porównania
+        target_f = curr_q_values.clone()
+        # Podmieniamy tylko wartości dla podjętych akcji
+        target_f.scatter_(1, actions.unsqueeze(1), targets.unsqueeze(1))
 
-            # Krok optymalizacji sieci
-            self.optimizer.zero_grad()
-            loss = self.criterion(target_f, target_new)
-            loss.backward()
-            self.optimizer.step()
+        # 3. JEDEN KROK OPTYMALIZACJI DLA CAŁEJ PACZKI
+        self.optimizer.zero_grad()
+        loss = self.criterion(curr_q_values, target_f)
+        loss.backward()
+        self.optimizer.step()
 
-        # Stopniowe zmniejszanie losowości (agent staje się pewniejszy siebie)
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
 
