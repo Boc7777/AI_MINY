@@ -14,16 +14,18 @@ class SaperNet(nn.Module):
         self.board_size = board_size
 
         self.conv = nn.Sequential(
-            nn.Conv2d(1, 32, kernel_size=3, padding=1),
+            nn.Conv2d(1, 64, kernel_size=3, padding=1),
             nn.ReLU(),
-            nn.Conv2d(32, 64, kernel_size=3, padding=1),
+            nn.Conv2d(64, 128, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(128, 256, kernel_size=3, padding=1),
             nn.ReLU()
         )
 
         self.fc = nn.Sequential(
-            nn.Linear(64 * board_size * board_size, 128),
+            nn.Linear(256 * board_size * board_size, 256),
             nn.ReLU(),
-            nn.Linear(128, output_size)
+            nn.Linear(256, output_size)
         )
 
     def forward(self, x):
@@ -37,7 +39,7 @@ class DDQNAgent:
     def __init__(self, board_size):
         self.state_size = board_size * board_size
         self.action_size = board_size * board_size
-
+        self.board_size = board_size
         #Replay Buffer
         self.memory = deque(maxlen=100000)
 
@@ -68,25 +70,38 @@ class DDQNAgent:
         for target_param, local_param in zip(self.target_model.parameters(), self.model.parameters()):
             target_param.data.copy_(self.tau * local_param.data + (1.0 - self.tau) * target_param.data)
 
-    def get_action(self, state):
-        valid_actions = [i for i, val in enumerate(state) if val < 0]
-        if not valid_actions:
-            return random.randrange(self.action_size), True
+    def get_action(self, state, use_rules=False):
+        # 1. PRÓBA UŻYCIA ZASAD LOGICZNYCH
+        if use_rules:
+            board_2d = state.reshape(self.board_size, self.board_size)
+            safe_actions = self.check_basic_rules(board_2d)
 
-        # RZUT MONETĄ
+            if safe_actions:
+                return safe_actions[0], False
+
+        # 2. DECYZJA SIECI NEURONOWEJ
+        valid_actions = [i for i, val in enumerate(state) if val < 0]
+
+        if not valid_actions:
+            return 0, False
+
+        #(Ruch losowy)
         if np.random.rand() <= self.epsilon:
+            # Ruch czysto losowy -> True
             return random.choice(valid_actions), True
 
-        # PYTANIE DO SIECI
-        state_t = torch.FloatTensor(state).unsqueeze(0).to(self.device)
-        with torch.no_grad():
-            act_values = self.model(state_t).cpu().numpy()[0]
+        #(CNN - Ruch zaplanowany)
+        else:
+            state_t = torch.FloatTensor(state).unsqueeze(0).to(self.device)
 
-        masked_q_values = np.full(self.action_size, -np.inf)
-        for i in valid_actions:
-            masked_q_values[i] = act_values[i]
+            with torch.no_grad():
+                q_values = self.model(state_t).squeeze(0).cpu().numpy()
 
-        return int(np.argmax(masked_q_values)), False
+            masked_q_values = np.full(self.board_size * self.board_size, -np.inf)
+            for act in valid_actions:
+                masked_q_values[act] = q_values[act]
+
+            return int(np.argmax(masked_q_values)), False
 
     def get_q_values(self, state):
         state_t = torch.FloatTensor(state).unsqueeze(0).to(self.device)
@@ -149,3 +164,55 @@ class DDQNAgent:
             print(f"Model {filename} został wczytany!")
         else:
             print("Nie znaleziono pliku modelu, zaczynam naukę od zera.")
+
+    def check_basic_rules(self, board_2d):
+        """
+        Skanuje planszę i zwraca listę indeksów pól (0-24 lub 0-35),
+        które na 100% są bezpieczne do kliknięcia na podstawie podstawowej logiki.
+        """
+        size = self.board_size
+        guaranteed_safe = set()
+        mines_found = set()
+
+        # Pomocnicza funkcja do pobierania sąsiadów
+        def get_neighbors(r, c):
+            return [(r + dr, c + dc) for dr in [-1, 0, 1] for dc in [-1, 0, 1]
+                    if (dr != 0 or dc != 0) and 0 <= r + dr < size and 0 <= c + dc < size]
+
+        # Przebieg 1: Szukamy pewnych min (żeby wiedzieć, gdzie są flagi)
+        for r in range(size):
+            for c in range(size):
+                val = board_2d[r][c]
+                if val > 0:  # Jeśli to odkryta cyfra (zakładamy wartości > 0 dla cyfr)
+                    # W Twoim kodzie cyfry mogą być przeskalowane (np. cyfra/8.0)
+                    # Musisz pomnożyć przez 8.0, żeby odzyskać prawdziwą cyfrę!
+                    true_val = round(val * 8.0)
+
+                    neighbors = get_neighbors(r, c)
+                    hidden = [n for n in neighbors if board_2d[n[0]][n[1]] == -0.1]  # Zakryte
+
+                    if len(hidden) == true_val:
+                        for h in hidden:
+                            mines_found.add(h[0] * size + h[1])  # Zapisujemy płaski indeks
+
+        # Przebieg 2: Szukamy pewnych bezpiecznych pól
+        for r in range(size):
+            for c in range(size):
+                val = board_2d[r][c]
+                if val > 0:
+                    true_val = round(val * 8.0)
+                    neighbors = get_neighbors(r, c)
+
+                    hidden = [n for n in neighbors if board_2d[n[0]][n[1]] == -0.1]
+                    hidden_indices = [n[0] * size + n[1] for n in hidden]
+
+                    # Liczymy ile z tych ukrytych to już "pewne miny"
+                    flags_around = [idx for idx in hidden_indices if idx in mines_found]
+
+                    # Jeśli znaleźliśmy już tyle min, ile mówi cyfra, reszta ukrytych jest bezpieczna!
+                    if len(flags_around) == true_val:
+                        safe_ones = [idx for idx in hidden_indices if idx not in mines_found]
+                        for s in safe_ones:
+                            guaranteed_safe.add(s)
+
+        return list(guaranteed_safe)

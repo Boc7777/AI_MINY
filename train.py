@@ -11,11 +11,12 @@ import matplotlib.pyplot as plt
 
 
 def run_experiment(episodes=1000,wczytaj_model=False):
-    env = Miny.SaperEnv(wielkosc_planszy=6, liczba_min=3)
-    agent = DDQNAgent(board_size=6)
+    env = Miny.SaperEnv(wielkosc_planszy=5, liczba_min=2)
+    agent = DDQNAgent(board_size=5)
 
     scheduler = StepLR(agent.optimizer, step_size=5000, gamma=0.5)
     batch_size = 128
+    use_rules = False
     history_wins = []
 
     if wczytaj_model:
@@ -31,7 +32,7 @@ def run_experiment(episodes=1000,wczytaj_model=False):
             kroki += 1
             q_main, q_target = agent.get_q_values(state)
 
-            action, is_random = agent.get_action(state)
+            action, is_random = agent.get_action(state,use_rules)
 
             next_state, reward, done = env.step_ai(action, q_values=(q_main, q_target),czy_losowy=is_random)
 
@@ -60,7 +61,7 @@ def run_experiment(episodes=1000,wczytaj_model=False):
 
 
 print("Trenowanie Agenta 'Od zera'...")
-wins_normal = run_experiment(episodes=10000, wczytaj_model=False)
+wins_normal = run_experiment(episodes=20000, wczytaj_model=False)
 
 def moving_average(x, w):
     return np.convolve(x, np.ones(w), 'valid') / w

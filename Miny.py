@@ -137,7 +137,7 @@ class SaperEnv:
                 "losowy": czy_losowy
             })
 
-    def step(self,move,akcja, q_values=None, czy_losowy=False):
+    def step(self,move,akcja=Akcja.STRZAL, q_values=None, czy_losowy=False):
 
         self.zapis_ruchow(move, akcja, q_values=q_values, czy_losowy=czy_losowy)
 
@@ -287,7 +287,7 @@ class SaperEnv:
         nagroda = nagr
         if koniec_gry:
             if self.czyWygranaGra:
-                nagroda = 20.0
+                nagroda = 120.0
             else:
                 nagroda = -15.0
 

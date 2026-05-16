@@ -1,0 +1,17 @@
+{
+    "seed": 667337138006500,
+    "wymiar": 5,
+    "liczba_min": 2,
+    "wygrana": true,
+    "ruchy": [
+        {
+            "coords": [
+                1,
+                1
+            ],
+            "akcja": 1,
+            "q_values": null,
+            "losowy": false
+        }
+    ]
+}
