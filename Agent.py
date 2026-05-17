@@ -47,7 +47,7 @@ class DDQNAgent:
         self.gamma = 0.99
         self.epsilon = 1.0
         self.epsilon_min = 0.025
-        self.epsilon_decay = 0.9995
+        self.epsilon_decay = 0.9996
         self.learning_rate = 0.0001
         self.tau = 0.005
 

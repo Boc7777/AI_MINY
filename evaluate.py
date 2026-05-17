@@ -7,8 +7,8 @@ import Miny
 
 
 def uruchom_testy(sciezka_do_modelu, uzyj_zasad=False, liczba_gier=1000):
-    env = SaperEnv(wielkosc_planszy=7, liczba_min=7)
-    agent = DDQNAgent(board_size=7)
+    env = SaperEnv(wielkosc_planszy=6, liczba_min=4)
+    agent = DDQNAgent(board_size=6)
 
     # 1. Ładujemy wyuczony mózg i zamrażamy go
     agent.model.load_state_dict(torch.load(sciezka_do_modelu))
@@ -20,7 +20,7 @@ def uruchom_testy(sciezka_do_modelu, uzyj_zasad=False, liczba_gier=1000):
 
     # Stałe plansze zapewniają identyczne warunki dla każdego wywołania
     for gra in range(liczba_gier):
-        state = env.reset(seed=gra)  # Stały seed gwarantuje te same plansze dla każdego modelu!
+        state = env.reset(seed=gra*9999999999999)  # Stały seed gwarantuje te same plansze dla każdego modelu!
         done = False
         kroki = 0
 
@@ -44,5 +44,5 @@ def uruchom_testy(sciezka_do_modelu, uzyj_zasad=False, liczba_gier=1000):
 
 
 # Wywołanie:
-uruchom_testy("modele/saper_7x7x7_sieć32_z_zasadami_20000.pth", uzyj_zasad=False)
-uruchom_testy("modele/saper_7x7x7_sieć32_z_zasadami_20000.pth", uzyj_zasad=True)
+uruchom_testy("modele/saper_6x6x4_sieć64_bez_zasad.pth", uzyj_zasad=False)
+uruchom_testy("modele/saper_6x6x4_sieć64_bez_zasad.pth", uzyj_zasad=True)
