@@ -13,6 +13,7 @@ class SaperNet(nn.Module):
         super(SaperNet, self).__init__()
         self.board_size = board_size
 
+
         self.conv = nn.Sequential(
             nn.Conv2d(1, 64, kernel_size=3, padding=1),
             nn.ReLU(),
@@ -31,6 +32,7 @@ class SaperNet(nn.Module):
     def forward(self, x):
         x = x.view(-1, 1, self.board_size, self.board_size)
         x = self.conv(x)
+
         x = x.view(x.size(0), -1)
         return self.fc(x)
 

@@ -11,8 +11,8 @@ import matplotlib.pyplot as plt
 
 
 def run_experiment(episodes=1000,wczytaj_model=False):
-    env = Miny.SaperEnv(wielkosc_planszy=9, liczba_min=10)
-    agent = DDQNAgent(board_size=9)
+    env = Miny.SaperEnv(wielkosc_planszy=6, liczba_min=3)
+    agent = DDQNAgent(board_size=6)
 
     scheduler = StepLR(agent.optimizer, step_size=5000, gamma=0.5)
     batch_size = 128
