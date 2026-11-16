@@ -8,6 +8,10 @@ Projekt agenta uczenia ze wzmocnieniem (Reinforcement Learning) rozwiązującego
 
 
 
+https://github.com/user-attachments/assets/7606d625-2d3c-4e45-9aae-bc556b83b4be
+
+
+
 ---
 
 ## Wnioski i badanie naukowe
